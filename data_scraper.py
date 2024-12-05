@@ -98,20 +98,35 @@ class SportsScraper:
             if not response:
                 print(f"Could not access game log for: {player_name}")
                 return pd.DataFrame()
+
+            print("Parsing game log data...")
+            soup = BeautifulSoup(response.content, 'html.parser')
             
-            # Parse game log
-            try:
-                print("Parsing game log data...")
-                games_df = pd.read_html(response.content, match='Game Log')[0]
-                print(f"Found {len(games_df)} rows of data")
-            except Exception as e:
-                print(f"Error parsing game log: {str(e)}")
+            # Find the game log table
+            table = soup.find('table', {'id': 'pgl_basic'})
+            if not table:
+                print("No game log table found!")
                 return pd.DataFrame()
+                
+            # Parse table into DataFrame
+            print("Converting table to DataFrame...")
+            df = pd.read_html(str(table))[0]
+            print(f"Found {len(df)} games")
+            print(f"Columns: {list(df.columns)}")
             
-            # Clean up the dataframe
-            games_df = games_df[games_df['G'].notna()]  # Remove header rows
-            games_df = games_df[~games_df['G'].str.contains('G')]  # Remove duplicate headers
-            print(f"After cleaning: {len(games_df)} rows")
+            # Clean up the DataFrame
+            df = df[df['Rk'].notna()]  # Remove summary rows
+            print(f"After cleaning: {len(df)} games")
+            
+            # Convert relevant columns to numeric
+            numeric_cols = ['PTS', 'AST', 'TRB', 'STL', 'BLK', '3P']
+            for col in numeric_cols:
+                if col in df.columns:
+                    df[col] = pd.to_numeric(df[col], errors='coerce')
+            
+            print("Final stats shape:", df.shape)
+            print("Sample of data:")
+            print(df.head())
             
             # Select and rename relevant columns
             cols_to_rename = {
@@ -125,26 +140,24 @@ class SportsScraper:
             }
             
             # Only keep columns that exist in the dataframe
-            print("Available columns:", list(games_df.columns))
-            cols_to_rename = {k: v for k, v in cols_to_rename.items() if k in games_df.columns}
-            games_df = games_df.rename(columns=cols_to_rename)
-            print("Renamed columns:", list(games_df.columns))
+            cols_to_rename = {k: v for k, v in cols_to_rename.items() if k in df.columns}
+            df = df.rename(columns=cols_to_rename)
             
             # Convert date column
-            games_df['date'] = pd.to_datetime(games_df['date'])
+            df['date'] = pd.to_datetime(df['date'])
             
             # Sort by date and get last n games
-            games_df = games_df.sort_values('date', ascending=False)
+            df = df.sort_values('date', ascending=False)
             if num_games:
-                games_df = games_df.head(num_games)
+                df = df.head(num_games)
             
             # Fill any missing values with 0
             for col in ['points', 'rebounds', 'assists', 'threes']:
-                if col in games_df.columns:
-                    games_df[col] = pd.to_numeric(games_df[col], errors='coerce').fillna(0)
+                if col in df.columns:
+                    df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
             
-            print(f"Final dataset has {len(games_df)} rows")
-            return games_df
+            print(f"Final dataset has {len(df)} rows")
+            return df
             
         except Exception as e:
             print(f"Error in get_nba_stats: {str(e)}")
