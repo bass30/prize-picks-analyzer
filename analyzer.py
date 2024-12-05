@@ -141,18 +141,29 @@ class PrizePicksAnalyzer:
 
     def suggest_line(self, player_name, metric, confidence_interval=0.80):
         """Suggest a line based on historical performance"""
+        print(f"\nAnalyzing data for {player_name}...")
+        print(f"Players in database: {list(self.player_stats.keys())}")
+        
         if player_name not in self.player_stats:
+            print(f"No data found for {player_name}")
             return None
             
         stats = self.player_stats[player_name]
+        print(f"Found {len(stats)} games for {player_name}")
+        
+        # Check if metric exists in data
         if not stats or metric not in stats[0]:
+            print(f"Metric {metric} not found in player data")
+            print(f"Available metrics: {list(stats[0].keys()) if stats else 'No stats available'}")
             return None
             
         # Get recent games data
         sorted_stats = sorted(stats, key=lambda x: x['date'], reverse=True)
         recent_values = [game[metric] for game in sorted_stats[:20]]  # Use last 20 games
+        print(f"Recent {metric} values: {recent_values}")
         
         if len(recent_values) < 5:
+            print(f"Not enough recent games (need 5, got {len(recent_values)})")
             return None
             
         # Calculate basic statistics
