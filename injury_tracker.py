@@ -141,6 +141,36 @@ class InjuryTracker:
             print(f"Error fetching MLB injuries: {str(e)}")
             return None
 
+    def get_player_status(self, player_name):
+        """Get injury status for a specific player"""
+        try:
+            # First check NBA injuries
+            nba_injuries = self.get_nba_injuries()
+            if nba_injuries:
+                for injury in nba_injuries.itertuples():
+                    if player_name.lower() in injury.player.lower():
+                        return injury.status
+            
+            # Check NFL injuries
+            nfl_injuries = self.get_nfl_injuries()
+            if nfl_injuries:
+                for injury in nfl_injuries.itertuples():
+                    if player_name.lower() in injury.player.lower():
+                        return injury.status
+            
+            # Check MLB injuries
+            mlb_injuries = self.get_mlb_injuries()
+            if mlb_injuries:
+                for injury in mlb_injuries.itertuples():
+                    if player_name.lower() in injury.player.lower():
+                        return injury.status
+            
+            return None  # Player not found in injury reports
+            
+        except Exception as e:
+            print(f"Error checking injury status: {str(e)}")
+            return None
+
     def check_player_injury(self, player_name, sport):
         """Check if a specific player is injured"""
         if sport == "NBA":
