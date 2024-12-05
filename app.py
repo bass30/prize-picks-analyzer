@@ -182,6 +182,16 @@ if page == "Home":
             if data is None or len(data) == 0:
                 st.error("No data found for this player!")
                 st.stop()
+
+            # Add data to analyzer
+            print(f"Adding {len(data)} games to analyzer...")
+            for idx, row in data.iterrows():
+                game_stats = row.to_dict()
+                analyzer.add_game_data(
+                    player_name=player_name,
+                    date=game_stats['date'],
+                    stats=game_stats
+                )
             
             # Get analysis
             suggestion = analyzer.suggest_line(player_name, metric)
