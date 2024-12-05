@@ -6,9 +6,17 @@ from data_scraper import SportsScraper
 import plotly.graph_objects as go
 
 # Initialize our classes
-scraper = SportsScraper()
-analyzer = PrizePicksAnalyzer()
-injury_tracker = InjuryTracker()
+if 'scraper' not in st.session_state:
+    st.session_state.scraper = SportsScraper()
+if 'analyzer' not in st.session_state:
+    st.session_state.analyzer = PrizePicksAnalyzer()
+if 'injury_tracker' not in st.session_state:
+    st.session_state.injury_tracker = InjuryTracker()
+
+# Use session state objects
+scraper = st.session_state.scraper
+analyzer = st.session_state.analyzer
+injury_tracker = st.session_state.injury_tracker
 
 # Set page config
 st.set_page_config(
