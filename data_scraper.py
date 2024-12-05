@@ -46,63 +46,95 @@ class SportsScraper:
         Scrape NBA stats from Basketball Reference
         """
         try:
-            # First, search for the player
-            search_url = f"https://www.basketball-reference.com/search/search.fcgi?search={quote(player_name)}"
-            response = self._safe_request(search_url)
+            # Format player name for URL
+            formatted_name = self._format_player_name(player_name)
+            first_letter = formatted_name[0]
+            
+            # Direct URL to player's page
+            player_url = f"https://www.basketball-reference.com/players/{first_letter}/{formatted_name}.html"
+            response = self._safe_request(player_url)
             
             if not response:
-                return None
+                # Try search if direct URL fails
+                search_url = f"https://www.basketball-reference.com/search/search.fcgi?search={quote(player_name)}"
+                response = self._safe_request(search_url)
                 
-            soup = BeautifulSoup(response.content, 'html.parser')
-            
-            # Find the first search result
-            search_result = soup.find('div', {'class': 'search-item-name'})
-            if not search_result:
-                print(f"Player not found: {player_name}")
-                return None
+                if not response:
+                    print(f"Could not find player: {player_name}")
+                    return pd.DataFrame()
                 
-            player_link = search_result.find('a')['href']
+                soup = BeautifulSoup(response.content, 'html.parser')
+                search_result = soup.find('div', {'class': 'search-item-name'})
+                
+                if not search_result:
+                    print(f"No search results found for: {player_name}")
+                    return pd.DataFrame()
+                
+                player_link = search_result.find('a')['href']
+                player_url = f"https://www.basketball-reference.com{player_link}"
+                response = self._safe_request(player_url)
+                
+                if not response:
+                    print(f"Could not access player page for: {player_name}")
+                    return pd.DataFrame()
             
-            # Get player's game log
+            # Get current season
             season = datetime.now().year
             if datetime.now().month < 8:  # If before August, use previous season
                 season -= 1
             
-            gamelog_url = f"https://www.basketball-reference.com{player_link.replace('.html', '')}/gamelog/{season}"
+            # Get game log URL
+            gamelog_url = player_url.replace('.html', f'/gamelog/{season}')
             response = self._safe_request(gamelog_url)
             
             if not response:
-                return None
-                
+                print(f"Could not access game log for: {player_name}")
+                return pd.DataFrame()
+            
             # Parse game log
-            games_df = pd.read_html(response.content, match='Game Log')[0]
+            try:
+                games_df = pd.read_html(response.content, match='Game Log')[0]
+            except Exception as e:
+                print(f"Error parsing game log: {str(e)}")
+                return pd.DataFrame()
             
             # Clean up the dataframe
             games_df = games_df[games_df['G'].notna()]  # Remove header rows
             games_df = games_df[~games_df['G'].str.contains('G')]  # Remove duplicate headers
             
-            # Rename columns
-            games_df = games_df.rename(columns={
+            # Select and rename relevant columns
+            cols_to_rename = {
                 'Date': 'date',
                 'PTS': 'points',
                 'TRB': 'rebounds',
                 'AST': 'assists',
+                '3P': 'threes',
                 'MP': 'minutes',
                 'Opp': 'opponent'
-            })
+            }
             
-            # Convert date
+            # Only keep columns that exist in the dataframe
+            cols_to_rename = {k: v for k, v in cols_to_rename.items() if k in games_df.columns}
+            games_df = games_df.rename(columns=cols_to_rename)
+            
+            # Convert date column
             games_df['date'] = pd.to_datetime(games_df['date'])
             
-            # Select relevant columns and last n games
-            relevant_cols = ['date', 'points', 'rebounds', 'assists', 'minutes', 'opponent']
-            games_df = games_df[relevant_cols].tail(num_games)
+            # Sort by date and get last n games
+            games_df = games_df.sort_values('date', ascending=False)
+            if num_games:
+                games_df = games_df.head(num_games)
+            
+            # Fill any missing values with 0
+            for col in ['points', 'rebounds', 'assists', 'threes']:
+                if col in games_df.columns:
+                    games_df[col] = pd.to_numeric(games_df[col], errors='coerce').fillna(0)
             
             return games_df
             
         except Exception as e:
-            print(f"Error fetching NBA stats: {str(e)}")
-            return None
+            print(f"Error in get_nba_stats: {str(e)}")
+            return pd.DataFrame()
 
     def get_nfl_stats(self, player_name, num_games=20):
         """
