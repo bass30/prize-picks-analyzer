@@ -144,7 +144,8 @@ class SportsScraper:
             df = df.rename(columns=cols_to_rename)
             
             # Convert date column
-            df['date'] = pd.to_datetime(df['date'])
+            df = df.rename(columns={'Date': 'date'})
+            df['date'] = pd.to_datetime(df['date'], format='mixed')
             
             # Sort by date and get last n games
             df = df.sort_values('date', ascending=False)
