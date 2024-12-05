@@ -45,6 +45,8 @@ class SportsScraper:
         """
         Scrape NBA stats from Basketball Reference
         """
+        print(f"\nAttempting to fetch data for {player_name}...")
+        
         try:
             # Format player name for URL
             formatted_name = self._format_player_name(player_name)
@@ -52,17 +54,21 @@ class SportsScraper:
             
             # Direct URL to player's page
             player_url = f"https://www.basketball-reference.com/players/{first_letter}/{formatted_name}.html"
+            print(f"Trying direct URL: {player_url}")
             response = self._safe_request(player_url)
             
             if not response:
+                print("Direct URL failed, trying search...")
                 # Try search if direct URL fails
                 search_url = f"https://www.basketball-reference.com/search/search.fcgi?search={quote(player_name)}"
+                print(f"Search URL: {search_url}")
                 response = self._safe_request(search_url)
                 
                 if not response:
                     print(f"Could not find player: {player_name}")
                     return pd.DataFrame()
                 
+                print("Parsing search results...")
                 soup = BeautifulSoup(response.content, 'html.parser')
                 search_result = soup.find('div', {'class': 'search-item-name'})
                 
@@ -72,6 +78,7 @@ class SportsScraper:
                 
                 player_link = search_result.find('a')['href']
                 player_url = f"https://www.basketball-reference.com{player_link}"
+                print(f"Found player URL: {player_url}")
                 response = self._safe_request(player_url)
                 
                 if not response:
@@ -85,6 +92,7 @@ class SportsScraper:
             
             # Get game log URL
             gamelog_url = player_url.replace('.html', f'/gamelog/{season}')
+            print(f"Fetching game log from: {gamelog_url}")
             response = self._safe_request(gamelog_url)
             
             if not response:
@@ -93,7 +101,9 @@ class SportsScraper:
             
             # Parse game log
             try:
+                print("Parsing game log data...")
                 games_df = pd.read_html(response.content, match='Game Log')[0]
+                print(f"Found {len(games_df)} rows of data")
             except Exception as e:
                 print(f"Error parsing game log: {str(e)}")
                 return pd.DataFrame()
@@ -101,6 +111,7 @@ class SportsScraper:
             # Clean up the dataframe
             games_df = games_df[games_df['G'].notna()]  # Remove header rows
             games_df = games_df[~games_df['G'].str.contains('G')]  # Remove duplicate headers
+            print(f"After cleaning: {len(games_df)} rows")
             
             # Select and rename relevant columns
             cols_to_rename = {
@@ -114,8 +125,10 @@ class SportsScraper:
             }
             
             # Only keep columns that exist in the dataframe
+            print("Available columns:", list(games_df.columns))
             cols_to_rename = {k: v for k, v in cols_to_rename.items() if k in games_df.columns}
             games_df = games_df.rename(columns=cols_to_rename)
+            print("Renamed columns:", list(games_df.columns))
             
             # Convert date column
             games_df['date'] = pd.to_datetime(games_df['date'])
@@ -130,10 +143,13 @@ class SportsScraper:
                 if col in games_df.columns:
                     games_df[col] = pd.to_numeric(games_df[col], errors='coerce').fillna(0)
             
+            print(f"Final dataset has {len(games_df)} rows")
             return games_df
             
         except Exception as e:
             print(f"Error in get_nba_stats: {str(e)}")
+            import traceback
+            print("Traceback:", traceback.format_exc())
             return pd.DataFrame()
 
     def get_nfl_stats(self, player_name, num_games=20):
