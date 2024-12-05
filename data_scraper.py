@@ -130,21 +130,20 @@ class SportsScraper:
             
             # Select and rename relevant columns
             cols_to_rename = {
-                'Date': 'date',
                 'PTS': 'points',
                 'TRB': 'rebounds',
                 'AST': 'assists',
                 '3P': 'threes',
-                'MP': 'minutes',
-                'Opp': 'opponent'
+                'Date': 'date',
+                'Opp': 'opponent',
+                'MP': 'minutes'
             }
             
             # Only keep columns that exist in the dataframe
             cols_to_rename = {k: v for k, v in cols_to_rename.items() if k in df.columns}
             df = df.rename(columns=cols_to_rename)
             
-            # Convert date column
-            df = df.rename(columns={'Date': 'date'})
+            # Convert date column to datetime
             df['date'] = pd.to_datetime(df['date'], format='mixed')
             
             # Sort by date and get last n games
@@ -153,11 +152,15 @@ class SportsScraper:
                 df = df.head(num_games)
             
             # Fill any missing values with 0
-            for col in ['points', 'rebounds', 'assists', 'threes']:
+            numeric_cols = ['points', 'rebounds', 'assists', 'threes']
+            for col in numeric_cols:
                 if col in df.columns:
                     df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
             
-            print(f"Final dataset has {len(df)} rows")
+            print(f"Final dataset has {len(df)} rows with columns: {list(df.columns)}")
+            print("Sample data:")
+            print(df[['date', 'points', 'rebounds', 'assists', 'threes']].head())
+            
             return df
             
         except Exception as e:
