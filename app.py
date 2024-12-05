@@ -1,10 +1,9 @@
 import streamlit as st
 import pandas as pd
-import plotly.graph_objects as go
-from data_scraper import SportsScraper
 from analyzer import PrizePicksAnalyzer
 from injury_tracker import InjuryTracker
-import time
+from data_scraper import SportsScraper
+import plotly.graph_objects as go
 
 # Initialize our classes
 scraper = SportsScraper()
@@ -14,46 +13,13 @@ injury_tracker = InjuryTracker()
 # Set page config
 st.set_page_config(
     page_title="Prize Picks Analyzer",
-    page_icon="🎯",
-    layout="wide"
+    layout="wide",
+    page_icon="🎯"
 )
 
 # Add custom CSS
 st.markdown("""
     <style>
-    .big-font {
-        font-size:24px !important;
-        font-weight: bold;
-    }
-    .medium-font {
-        font-size:18px !important;
-    }
-    .recommendation {
-        padding: 20px;
-        border-radius: 10px;
-        margin: 10px 0;
-    }
-    .high {
-        background-color: rgba(0, 255, 0, 0.1);
-    }
-    .medium {
-        background-color: rgba(255, 165, 0, 0.1);
-    }
-    .low {
-        background-color: rgba(255, 0, 0, 0.1);
-    }
-    .injury-alert {
-        background-color: rgba(255, 0, 0, 0.1);
-        padding: 10px;
-        border-radius: 5px;
-        margin: 10px 0;
-    }
-    .suggested-line {
-        background-color: rgba(0, 191, 255, 0.1);
-        padding: 20px;
-        border-radius: 10px;
-        margin: 10px 0;
-    }
     .main {
         padding: 2rem;
     }
@@ -84,7 +50,7 @@ st.markdown("""
 
 # Sidebar navigation
 page = st.sidebar.selectbox(
-    "Select Page",
+    "Navigation",
     ["Home", "Analysis", "Injury Tracker", "Documentation"]
 )
 
@@ -92,106 +58,103 @@ def create_trend_chart(data, metric):
     """Create an interactive trend chart"""
     fig = go.Figure()
     
-    # Add the actual values
+    # Add the metric line
     fig.add_trace(go.Scatter(
-        x=data['date'],
+        x=list(range(len(data))),
         y=data[metric],
+        mode='lines+markers',
         name=metric.title(),
-        line=dict(color='blue', width=2)
+        line=dict(color='#FF4B4B')
     ))
     
-    # Add moving average
-    ma = data[metric].rolling(window=5).mean()
+    # Calculate moving averages
+    ma5 = data[metric].rolling(window=5).mean()
+    ma10 = data[metric].rolling(window=10).mean()
+    
+    # Add moving averages
     fig.add_trace(go.Scatter(
-        x=data['date'],
-        y=ma,
-        name='5-Game Average',
-        line=dict(color='red', width=2, dash='dash')
+        x=list(range(len(data))),
+        y=ma5,
+        mode='lines',
+        name='5-Game MA',
+        line=dict(dash='dash')
     ))
     
+    fig.add_trace(go.Scatter(
+        x=list(range(len(data))),
+        y=ma10,
+        mode='lines',
+        name='10-Game MA',
+        line=dict(dash='dot')
+    ))
+    
+    # Update layout
     fig.update_layout(
-        title=f'{metric.title()} Trend',
-        xaxis_title='Date',
+        title=f'{metric.title()} Trend Analysis',
+        xaxis_title='Games',
         yaxis_title=metric.title(),
-        hovermode='x unified',
-        showlegend=True
+        hovermode='x unified'
     )
     
     return fig
 
 def display_injury_status(player_name, sport):
     """Display injury status for a player"""
-    injury_data = injury_tracker.check_player_injury(player_name, sport)
+    status = injury_tracker.get_player_status(player_name)
     
-    if injury_data:
-        st.markdown(
-            f"""
-            <div class="injury-alert">
-                <h3>⚠️ Injury Alert</h3>
-                <p><strong>Status:</strong> {injury_data['status']}</p>
-                <p><strong>Details:</strong> {injury_data['details']}</p>
-                <p><strong>Last Updated:</strong> {injury_data['date']}</p>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+    if status:
+        if "OUT" in status.upper():
+            st.error(f"⛔️ {player_name} is OUT!")
+        elif "QUESTIONABLE" in status.upper():
+            st.warning(f"⚠️ {player_name} is QUESTIONABLE")
+        elif "PROBABLE" in status.upper():
+            st.info(f"ℹ️ {player_name} is PROBABLE")
+        else:
+            st.success(f"✅ {player_name} is ACTIVE")
         return True
     return False
 
 def display_suggested_line(suggestion):
     """Display suggested line information"""
-    if suggestion:
-        st.markdown(
-            f"""
-            <div class="suggested-line">
-                <h3>📊 Suggested Line Analysis</h3>
-                <p><strong>Suggested Line:</strong> {suggestion['suggested_line']}</p>
-                <p><strong>Range:</strong> {suggestion['range'][0]} - {suggestion['range'][1]}</p>
-                <p><strong>Recent Form:</strong> {suggestion['recent_form']}</p>
-                <p><strong>Season Average:</strong> {suggestion['mean']}</p>
-                <p><strong>Last 5 Games:</strong> {suggestion['last_5_avg']}</p>
-                <p><strong>Confidence:</strong> {suggestion['confidence']*100}%</p>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.metric("Suggested Line", f"{suggestion['suggested_line']:.1f}")
+        
+    with col2:
+        st.metric("Recent Form", suggestion['recent_form'])
+        
+    with col3:
+        st.metric("Confidence", f"{suggestion['confidence']*100:.0f}%")
+        
+    st.write(f"Range: {suggestion['range'][0]:.1f} - {suggestion['range'][1]:.1f}")
 
 if page == "Home":
     st.title("🎯 Prize Picks Analyzer")
     st.markdown("---")
     
-    # Sidebar
-    st.sidebar.markdown('<p class="big-font">Settings</p>', unsafe_allow_html=True)
+    # Sidebar inputs
+    st.sidebar.header("Analysis Parameters")
     
-    # Sport selection
     sport = st.sidebar.selectbox(
         "Select Sport",
-        ["NBA", "NFL", "MLB"],
-        help="Choose the sport you want to analyze"
+        ["NBA", "NFL", "MLB"]
     )
     
-    # Get available metrics based on sport
-    if sport == "NBA":
-        available_metrics = ["points", "rebounds", "assists"]
-    elif sport == "NFL":
-        available_metrics = ["passing_yards", "rushing_yards", "passing_td", "rushing_td"]
-    else:  # MLB
-        available_metrics = ["hits", "home_runs", "rbis"]
-    
-    # Player name input
     player_name = st.sidebar.text_input(
         "Player Name",
-        help="Enter the full name of the player (e.g., LeBron James)"
+        help="Enter the full name of the player"
     )
     
-    # Metric selection
     metric = st.sidebar.selectbox(
         "Select Metric",
-        available_metrics,
-        help="Choose the statistic you want to analyze"
+        {
+            "NBA": ["points", "rebounds", "assists", "threes"],
+            "NFL": ["passing_yards", "rushing_yards", "receptions"],
+            "MLB": ["strikeouts", "hits", "runs"]
+        }.get(sport, [])
     )
     
-    # Line input
     line = st.sidebar.number_input(
         "Prize Picks Line",
         min_value=0.0,
@@ -202,7 +165,7 @@ if page == "Home":
     if st.sidebar.button("Analyze", type="primary"):
         if not player_name:
             st.error("Please enter a player name!")
-            return
+            st.stop()  # Use st.stop() instead of return
             
         with st.spinner(f"Fetching data for {player_name}..."):
             # Check for injuries first
@@ -215,61 +178,36 @@ if page == "Home":
                 data = scraper.get_nfl_stats(player_name)
             else:
                 data = scraper.get_mlb_stats(player_name)
-                
-            if data is None:
-                st.error(f"Could not fetch data for {player_name}. Please check the name and try again.")
-                return
-                
-            # Add data to analyzer
-            for _, game in data.iterrows():
-                analyzer.add_game_data(player_name, game['date'], game.to_dict())
             
-            # Get suggested line
+            if data is None or len(data) == 0:
+                st.error("No data found for this player!")
+                st.stop()
+            
+            # Get analysis
             suggestion = analyzer.suggest_line(player_name, metric)
+            trend = analyzer.analyze_trend(player_name, metric, line)
             
-            # Create columns for layout
-            col1, col2 = st.columns([2, 1])
+            # Display results
+            st.header("Analysis Results")
             
-            with col1:
-                st.markdown(f"### Recent {metric.title()} Trend")
-                fig = create_trend_chart(data, metric)
-                st.plotly_chart(fig, use_container_width=True)
-                
-            with col2:
-                # Display suggested line first
-                display_suggested_line(suggestion)
-                
-                # If user provided a line, show analysis
-                if line > 0:
-                    st.markdown("### Prize Picks Analysis")
-                    analysis = analyzer.analyze_trend(player_name, metric, line)
-                    
-                    # Display averages
-                    st.markdown(f"**Last 5 Games Avg:** {analysis['last_5_avg']:.1f}")
-                    st.markdown(f"**Last 10 Games Avg:** {analysis['last_10_avg']:.1f}")
-                    st.markdown(f"**Prize Picks Line:** {line}")
-                    
-                    # Display recommendation with styling
-                    confidence_class = analysis['confidence'].lower()
-                    st.markdown(
-                        f"""
-                        <div class="recommendation {confidence_class}">
-                            <p class="big-font">Recommendation: {analysis['recommendation']}</p>
-                            <p class="medium-font">Confidence: {analysis['confidence']}</p>
-                            <p>Trend: {analysis['trend']}</p>
-                        </div>
-                        """,
-                        unsafe_allow_html=True
-                    )
+            # Display suggested line
+            display_suggested_line(suggestion)
             
-            # Display recent games table
-            st.markdown("### Recent Games")
-            st.dataframe(
-                data[['date', metric, 'opponent']].sort_values('date', ascending=False),
-                use_container_width=True
-            )
+            # Display trend analysis
+            st.subheader("Trend Analysis")
+            fig = create_trend_chart(data, metric)
+            st.plotly_chart(fig, use_container_width=True)
             
-            # If injured, show warning
+            # Display recommendation
+            st.subheader("Recommendation")
+            if trend['recommendation'] == "OVER":
+                st.success(f"🔥 OVER {line} ({trend['confidence']} Confidence)")
+            elif trend['recommendation'] == "UNDER":
+                st.success(f"❄️ UNDER {line} ({trend['confidence']} Confidence)")
+            else:
+                st.warning("⚠️ AVOID - Not enough confidence in either direction")
+            
+            # Warning for injured players
             if is_injured:
                 st.warning("⚠️ Consider the injury status before placing any bets!")
 
